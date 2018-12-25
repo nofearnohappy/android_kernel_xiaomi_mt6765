@@ -37,10 +37,8 @@ void *ion_heap_map_kernel(struct ion_heap *heap,
 	struct page **pages = vmalloc(sizeof(struct page *) * npages);
 	struct page **tmp = pages;
 
-	if (!pages) {
-		IONMSG("%s vmalloc failed pages is null.\n", __func__);
-		return NULL;
-	}
+	if (!pages)
+		return ERR_PTR(-ENOMEM);
 
 	if (buffer->flags & ION_FLAG_CACHED)
 		pgprot = PAGE_KERNEL;
@@ -58,10 +56,8 @@ void *ion_heap_map_kernel(struct ion_heap *heap,
 	vaddr = vmap(pages, npages, VM_MAP, pgprot);
 	vfree(pages);
 
-	if (!vaddr) {
-		IONMSG("%s vmap failed vaddr is null.\n", __func__);
+	if (!vaddr)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	return vaddr;
 }
@@ -97,13 +93,9 @@ int ion_heap_map_user(struct ion_heap *heap, struct ion_buffer *buffer,
 		}
 		len = min(len, remainder);
 		ret = remap_pfn_range(vma, addr, page_to_pfn(page), len,
-				vma->vm_page_prot);
-		if (ret) {
-			IONMSG("%s remap fail 0x%p, %lu, %lu, %lu, %d.\n",
-			       __func__, vma, addr,
-			       page_to_pfn(page), len, ret);
+				      vma->vm_page_prot);
+		if (ret)
 			return ret;
-		}
 		addr += len;
 		if (addr >= vma->vm_end)
 			return 0;
@@ -115,10 +107,8 @@ static int ion_heap_clear_pages(struct page **pages, int num, pgprot_t pgprot)
 {
 	void *addr = vm_map_ram(pages, num, -1, pgprot);
 
-	if (!addr) {
-		IONMSG("%s vm_map_ram failed addr is null.\n", __func__);
+	if (!addr)
 		return -ENOMEM;
-	}
 	memset(addr, 0, PAGE_SIZE * num);
 	vm_unmap_ram(addr, num);
 
@@ -137,11 +127,8 @@ static int ion_heap_sglist_zero(struct scatterlist *sgl, unsigned int nents,
 		pages[p++] = sg_page_iter_page(&piter);
 		if (p == ARRAY_SIZE(pages)) {
 			ret = ion_heap_clear_pages(pages, p, pgprot);
-			if (ret) {
-				IONMSG("%s ion_heap_clear_pages failed.\n",
-				       __func__);
+			if (ret)
 				return ret;
-			}
 			p = 0;
 		}
 	}
@@ -334,9 +321,8 @@ struct ion_heap *ion_heap_create(struct ion_platform_heap *heap_data)
 
 	switch (heap_data->type) {
 	case ION_HEAP_TYPE_SYSTEM_CONTIG:
-		IONMSG("%s: Heap type is disabled: %d\n",
-		       __func__, heap_data->type);
-		return ERR_PTR(-EINVAL);
+		heap = ion_system_contig_heap_create(heap_data);
+		break;
 	case ION_HEAP_TYPE_SYSTEM:
 		heap = ion_system_heap_create(heap_data);
 		break;
@@ -375,8 +361,7 @@ void ion_heap_destroy(struct ion_heap *heap)
 
 	switch (heap->type) {
 	case ION_HEAP_TYPE_SYSTEM_CONTIG:
-		IONMSG("%s: Heap type is disabled: %d\n",
-		       __func__, heap->type);
+		ion_system_contig_heap_destroy(heap);
 		break;
 	case ION_HEAP_TYPE_SYSTEM:
 		ion_system_heap_destroy(heap);
